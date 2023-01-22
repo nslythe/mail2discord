@@ -6,6 +6,8 @@ import threading
 import queue
 import yaml
 
+#todo support encryption
+
 with open("config.yaml", 'r') as stream:
     config = yaml.safe_load(stream)
 
@@ -22,11 +24,11 @@ def discord_webhook_worker():
         mentions = []
 
         for to in envelope.rcpt_tos:
-            if to in config["mappings"]:
+            if "mappings" in config and to in config["mappings"]:
                 mentions.append("<@" + str(config["mappings"][to]) + ">")
 
         webhook = DiscordWebhook(url=config["url"], username=envelope.mail_from)
-        embed = DiscordEmbed(title='Alert', description=" ".join(mentions)+ " " + content)
+        embed = DiscordEmbed(title=message.get("Subject"), description=" ".join(mentions)+ " " + content)
         webhook.add_embed(embed)
         response = webhook.execute()
 
@@ -44,7 +46,7 @@ class CustomSMTPHandler:
 
 threading.Thread(target=discord_webhook_worker, daemon=True).start()
 handler = CustomSMTPHandler()
-server = aiosmtpd.controller.Controller(handler, hostname="10.1.1.23", port=25)
+server = aiosmtpd.controller.Controller(handler, hostname="", port=25)
 server.start()
 input("Server started. Press Return to quit.")
 server.stop()
