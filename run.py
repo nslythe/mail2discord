@@ -36,6 +36,9 @@ class Config:
     def get_webhook_url(self, to_list):
         raise NotImplementedError
 
+    def get_project_url(self):
+        return "https://github.com/nslythe/mail2discord"
+
 
 class ConfigFile(Config):
     def __init__(self):
@@ -68,8 +71,6 @@ class ConfigFile(Config):
                 return_value.append(self.data["mappings"][to]["url"])
         return return_value
     
-    def get_project_url(self):
-        return "https://github.com/nslythe/mail2discord"
 
 
 class mail2discordServer:
