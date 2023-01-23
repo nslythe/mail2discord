@@ -25,7 +25,7 @@ logger = logging.getLogger()
 
 class Config:
     avatar_size = 20
-    avatar_default = "https://www.interstatedevelopment.com/wp-content/uploads/2019/04/generic-avatar-1-300x273.jpg"
+    avatar_default = "https://www.gravatar.com/avatar/00000000000000000000000000000000"
 
     def get_mentions(self, to_list):
         raise NotImplementedError
