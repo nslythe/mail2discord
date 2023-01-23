@@ -70,7 +70,6 @@ class ConfigFile(Config):
             if "url" in self.data["mappings"][to]:
                 return_value.append(self.data["mappings"][to]["url"])
         return return_value
-    
 
 
 class mail2discordServer:
@@ -128,24 +127,29 @@ class mail2discordServer:
     def join(self):
         self.discord_thread.join()
 
-
 stop = False
 def handler(signum, frame):
     logger.info(f"Received signal STOPPING")
     global stop
     stop = True
-signal.signal(signal.SIGINT, handler)
 
-config = ConfigFile()
-server = mail2discordServer(config)
-server.start()
 
-while not stop:
-    try:
-        time.sleep(0.2)
-    except KeyboardInterrupt:
-        logger.info(f"KeyboardInterrupt STOPPING")
-        break
+def main():
+    signal.signal(signal.SIGINT, handler)
+    config = ConfigFile()
+    server = mail2discordServer(config)
+    server.start()
 
-server.stop()
-server.join()
+    while not stop:
+        try:
+            time.sleep(0.2)
+        except KeyboardInterrupt:
+            logger.info(f"KeyboardInterrupt STOPPING")
+            break
+
+    server.stop()
+    server.join()
+    
+
+if __name__ == "__main__":
+    main()
