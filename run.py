@@ -5,48 +5,100 @@ from discord_webhook import DiscordWebhook, DiscordEmbed
 import threading
 import queue
 import yaml
+import os
+import signal
+import time
+import logging
 
 #todo support encryption
 
-with open("config.yaml", 'r') as stream:
-    config = yaml.safe_load(stream)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger()
 
-q = queue.Queue()
+class mail2discordServer:
+    class CustomSMTPHandler:
+        def __init__(self, queue):
+            self.queue = queue
 
-def discord_webhook_worker():
-    while True:
-        envelope = q.get()
+        async def handle_DATA(self, server, session, envelope):
+            self.queue.put(envelope)
+            return '250 OK'
 
-        message = email.message_from_bytes(envelope.content, policy=email.policy.default)
-        body = message.get_body(preferencelist=('plain', 'related', 'html'))
-        content = body.get_content()
+    def __init__(self):
+        if os.path.isfile("/config/config.yaml"):
+            with open("/config/config.yaml", 'r') as stream:
+                self.config = yaml.safe_load(stream)
+        elif os.path.isfile("config.yaml"):
+            with open("config.yaml", 'r') as stream:
+                self.config = yaml.safe_load(stream)
 
-        mentions = []
+        logger.info(f"Config: {self.config}")
 
-        for to in envelope.rcpt_tos:
-            if "mappings" in config and to in config["mappings"]:
-                mentions.append("<@" + str(config["mappings"][to]) + ">")
+        self.__stop = False
+        self.queue = queue.Queue()
+        self.discord_thread = threading.Thread(target=self.discord_webhook_worker, daemon=False)
+        self.handler = mail2discordServer.CustomSMTPHandler(self.queue)
+        self.smtp_thread = aiosmtpd.controller.Controller(self.handler, hostname="", port=25)
 
-        webhook = DiscordWebhook(url=config["url"], username=envelope.mail_from)
-        embed = DiscordEmbed(title=message.get("Subject"), description=" ".join(mentions)+ " " + content)
-        webhook.add_embed(embed)
-        response = webhook.execute()
+    def discord_webhook_worker(self):
+        while not self.__stop:
+            try:
+                envelope = self.queue.get(timeout = 1)
+            except queue.Empty:
+                envelope = None
 
-        q.task_done()
+            if envelope is not None:
+                message = email.message_from_bytes(envelope.content, policy=email.policy.default)
+                body = message.get_body(preferencelist=('plain', 'related', 'html'))
+                content = body.get_content()
 
-class CustomSMTPHandler:
-    async def handle_DATA(self, server, session, envelope):
-        q.put(envelope)
-        return '250 OK'
+                mentions = []
+
+                for to in envelope.rcpt_tos:
+                    if "mappings" in self.config and to in self.config["mappings"]:
+                        mentions.append("<@" + str(self.config["mappings"][to]) + ">")
+
+                webhook = DiscordWebhook(url=self.config["url"], username=envelope.mail_from)
+                embed = DiscordEmbed(title=message.get("Subject"), description=" ".join(mentions)+ " " + content)
+                webhook.add_embed(embed)
+                response = webhook.execute()
+
+                self.queue.task_done()
+
+    def start(self):
+        self.smtp_thread.start()
+        self.discord_thread.start()
+
+    def stop(self):
+        self.__stop = True
+        self.smtp_thread.stop()
+
+    def join(self):
+        self.discord_thread.join()
 
 
+stop = False
+def handler(signum, frame):
+    logger.info(f"Received signal STOPPING")
+    global stop
+    stop = True
+signal.signal(signal.SIGINT, handler)
 
-
-
-
-threading.Thread(target=discord_webhook_worker, daemon=True).start()
-handler = CustomSMTPHandler()
-server = aiosmtpd.controller.Controller(handler, hostname="", port=25)
+server = mail2discordServer()
 server.start()
-input("Server started. Press Return to quit.")
+
+while not stop:
+    try:
+        time.sleep(0.2)
+    except KeyboardInterrupt:
+        logger.info(f"KeyboardInterrupt STOPPING")
+        break
+
 server.stop()
+server.join()
